@@ -12,8 +12,48 @@
 | App Sandbox для Mac App Store | `Config/ProBro-macOS.entitlements` | Mac App Store без песочницы не принимает |
 | Privacy manifest | `App/Resources/PrivacyInfo.xcprivacy` | Обязателен для App Store |
 | CI | `.github/workflows/ci.yml` | Сборка и тесты на macOS и iOS Simulator на каждый push |
+| Рабочий стол Mac из Windows | `.github/workflows/macos-desktop.yml` | Экран macOS с Xcode и симулятором в VNC-клиенте на Windows |
 | Интерактивный Mac по SSH | `.github/workflows/macos-sandbox.yml` | Удалённый терминал на настоящем macOS с Xcode |
 | Выгрузка в App Store Connect | `.github/workflows/release.yml`, `scripts/release.sh` | Архив, подпись и upload в TestFlight/App Store |
+
+## 0. Рабочий стол Mac из Windows (VNC)
+
+Workflow запускает macOS-раннер с Xcode и включает на нём Screen Sharing.
+Затем подключает раннер к вашей приватной сети Tailscale. В интернет экран не открывается,
+его видят только ваши устройства в Tailscale.
+
+Однократная подготовка:
+
+1. Зарегистрируйтесь в [Tailscale](https://tailscale.com) (бесплатно), установите Tailscale для Windows и войдите.
+2. В админке Tailscale: **Settings → Keys → Generate auth key**, включите **Reusable** и **Ephemeral**.
+   Ephemeral-устройства сами удаляются из сети после выключения раннера.
+3. Установите на Windows [TigerVNC Viewer](https://tigervnc.org). Подойдёт и TightVNC, нужен клиент с обычным VNC-паролем.
+4. В репозитории откройте **Settings → Secrets and variables → Actions** и добавьте секреты:
+
+   | Секрет | Значение |
+   |---|---|
+   | `TAILSCALE_AUTHKEY` | ключ из шага 2 (`tskey-auth-...`) |
+   | `VNC_PASSWORD` | пароль для VNC, **не длиннее 8 символов** (так устроен протокол VNC) |
+
+Запуск:
+
+1. **Actions → macOS desktop (VNC) → Run workflow**, укажите, сколько минут держать Mac (до 350).
+2. Подождите 1–2 минуты, откройте лог шага *Keep desktop alive*. Там будет адрес вида `probro-mac-12:5900`
+   (или IP `100.x.y.z:5900`).
+3. Откройте TigerVNC Viewer, введите этот адрес и `VNC_PASSWORD`.
+4. Работайте в Xcode, как на обычном Mac. Проект уже сгенерирован в `~/work/ProBro/ProBro`.
+5. **Закоммитьте и запушьте изменения до конца сессии**: после неё машина удаляется со всеми файлами.
+   Чтобы завершить раньше, создайте на рабочем столе Mac файл `STOP` или отмените запуск в Actions.
+
+Без секретов workflow только проверяет, что VNC показывает экран, и завершается.
+
+Ограничения:
+
+- Экран 1024×768.
+- Пароль пользователя macOS `runner` неизвестен и не меняется. `sudo` в Терминале работает без пароля,
+  но окна, которые просят пароль пользователя (например, Связка ключей), подтвердить не получится.
+- Workflow выдаёт службе Screen Sharing право записывать экран и управлять вводом,
+  потому что на машине CI некому нажать «Разрешить». Это меняет только временную машину GitHub.
 
 ## 1. Удалённый Mac по SSH
 
