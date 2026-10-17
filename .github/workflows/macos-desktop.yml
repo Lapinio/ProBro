@@ -92,13 +92,14 @@ jobs:
           authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
           hostname: probro-mac-${{ github.run_number }}
           # The runner only needs to be reachable; it must not route its own traffic through the tailnet.
-          args: --accept-routes=false --accept-dns=false
+          args: --accept-dns=false
 
       - name: Check VNC over Tailscale
         if: env.TAILSCALE_AUTHKEY != ''
         run: |
           # The action points macOS system DNS at MagicDNS; if that resolver stalls, the runner loses
           # contact with GitHub and the job dies. Put the runner's own DNS back.
+          sudo tailscale set --accept-routes=false
           sudo networksetup -setdnsservers Ethernet Empty
           sudo networksetup -setsearchdomains Ethernet Empty
           scutil --dns | grep -m3 nameserver || true
