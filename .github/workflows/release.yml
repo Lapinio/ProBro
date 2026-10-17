@@ -28,7 +28,7 @@ jobs:
             echo "run=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         if: steps.gate.outputs.run == 'true'
 
       - name: Select Xcode 26
@@ -58,7 +58,7 @@ jobs:
 
       - name: Keep archive
         if: steps.gate.outputs.run == 'true' && always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ProBro-${{ matrix.platform }}-${{ github.run_number }}
           path: build/${{ matrix.platform }}/ProBro.xcarchive
