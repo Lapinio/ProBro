@@ -11,6 +11,10 @@ on:
         default: "120"
         required: true
 
+# Lets you `git push` your work from the Mac before the session ends.
+permissions:
+  contents: write
+
 jobs:
   desktop:
     runs-on: macos-26

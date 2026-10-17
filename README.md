@@ -26,8 +26,10 @@ Workflow запускает macOS-раннер с Xcode и включает на
 
 1. Зарегистрируйтесь в [Tailscale](https://tailscale.com) (бесплатно), установите Tailscale для Windows и войдите.
 2. В админке Tailscale: **Settings → Keys → Generate auth key**, включите **Reusable** и **Ephemeral**.
-   Ephemeral-устройства сами удаляются из сети после выключения раннера.
-3. Установите на Windows [TigerVNC Viewer](https://tigervnc.org). Подойдёт и TightVNC, нужен клиент с обычным VNC-паролем.
+   Без **Reusable** ключ сгорит после первого запуска. Ephemeral-устройства сами удаляются из сети после выключения раннера.
+3. Установите на Windows TigerVNC Viewer: `winget install --id TigerVNC.TigerVNC --exact`.
+   В **Options → Security** оставьте только **Standard VNC** и **Encryption: None**, иначе он спросит имя пользователя macOS,
+   а пароль пользователя `runner` неизвестен. Трафик и так шифрует Tailscale.
 4. В репозитории откройте **Settings → Secrets and variables → Actions** и добавьте секреты:
 
    | Секрет | Значение |
@@ -38,9 +40,9 @@ Workflow запускает macOS-раннер с Xcode и включает на
 Запуск:
 
 1. **Actions → macOS desktop (VNC) → Run workflow**, укажите, сколько минут держать Mac (до 350).
-2. Подождите 1–2 минуты, откройте лог шага *Keep desktop alive*. Там будет адрес вида `probro-mac-12:5900`
-   (или IP `100.x.y.z:5900`).
-3. Откройте TigerVNC Viewer, введите этот адрес и `VNC_PASSWORD`.
+2. Подождите 2–3 минуты. В `tailscale status` на Windows появится устройство `probro-mac-<номер запуска>`.
+   Каждый запуск создаёт новую машину с новым номером.
+3. Откройте TigerVNC Viewer, введите его адрес `100.x.y.z` (надёжнее имени) и `VNC_PASSWORD`.
 4. Работайте в Xcode, как на обычном Mac. Проект уже сгенерирован в `~/work/ProBro/ProBro`.
 5. **Закоммитьте и запушьте изменения до конца сессии**: после неё машина удаляется со всеми файлами.
    Чтобы завершить раньше, создайте на рабочем столе Mac файл `STOP` или отмените запуск в Actions.
