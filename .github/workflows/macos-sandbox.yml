@@ -1,0 +1,35 @@
+name: macOS sandbox (SSH)
+
+# Starts a macOS runner with Xcode and opens an interactive SSH session via tmate.
+# Run it from the Actions tab, then copy the `ssh ...` line from the job log.
+on:
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: "How long to keep the session alive (max 350)"
+        default: "120"
+        required: true
+
+jobs:
+  sandbox:
+    runs-on: macos-26
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 26
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)"
+
+      - name: Prepare project
+        run: |
+          make project
+          xcodebuild -version
+          xcrun simctl list devices available | head -40
+
+      - name: Open SSH session
+        uses: mxschmitt/action-tmate@v3
+        timeout-minutes: ${{ fromJSON(github.event.inputs.minutes) }}
+        with:
+          # Only the GitHub user who started the run can connect (uses their SSH keys from GitHub).
+          limit-access-to-actor: true
+          detached: false

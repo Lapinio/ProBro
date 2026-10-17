@@ -1,0 +1,65 @@
+name: Release to App Store Connect
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "Which build to upload"
+        type: choice
+        options: [ios, macos, both]
+        default: both
+
+jobs:
+  upload:
+    name: upload ${{ matrix.platform }}
+    runs-on: macos-26
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [ios, macos]
+    steps:
+      - name: Skip unselected platform
+        id: gate
+        run: |
+          if [ "${{ inputs.platform }}" = "both" ] || [ "${{ inputs.platform }}" = "${{ matrix.platform }}" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.run == 'true'
+
+      - name: Select Xcode 26
+        if: steps.gate.outputs.run == 'true'
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)"
+
+      - name: Generate Xcode project
+        if: steps.gate.outputs.run == 'true'
+        run: make project
+
+      - name: Write App Store Connect API key
+        if: steps.gate.outputs.run == 'true'
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/AuthKey.p8"
+          echo "ASC_KEY_PATH=$RUNNER_TEMP/AuthKey.p8" >> "$GITHUB_ENV"
+
+      - name: Archive and upload
+        if: steps.gate.outputs.run == 'true'
+        env:
+          DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: scripts/release.sh ${{ matrix.platform }}
+
+      - name: Keep archive
+        if: steps.gate.outputs.run == 'true' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProBro-${{ matrix.platform }}-${{ github.run_number }}
+          path: build/${{ matrix.platform }}/ProBro.xcarchive
+          if-no-files-found: ignore
