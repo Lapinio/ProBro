@@ -36,8 +36,9 @@ jobs:
             fi
             VNC_PASSWORD="$(openssl rand -hex 4)"
           fi
-          # Same password for the macOS user "runner" (login, sudo, Keychain prompts).
-          sudo dscl . -passwd /Users/runner "$VNC_PASSWORD"
+          # Same password for the macOS user "runner" (login, sudo, Keychain prompts), if the image allows it.
+          sudo sysadminctl -resetPasswordFor runner -newPassword "$VNC_PASSWORD" 2>&1 \
+            || echo "::warning::Could not set the runner user password; VNC still works with VNC_PASSWORD."
           kickstart=/System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart
           sudo "$kickstart" -configure -allowAccessFor -allUsers -privs -all
           sudo "$kickstart" -configure -clientopts -setvnclegacy -vnclegacy yes -setvncpw -vncpw "$VNC_PASSWORD"
