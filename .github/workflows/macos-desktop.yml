@@ -91,10 +91,17 @@ jobs:
         with:
           authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
           hostname: probro-mac-${{ github.run_number }}
+          # The runner only needs to be reachable; it must not route its own traffic through the tailnet.
+          args: --accept-routes=false --accept-dns=false
 
       - name: Check VNC over Tailscale
         if: env.TAILSCALE_AUTHKEY != ''
         run: |
+          # The action points macOS system DNS at MagicDNS; if that resolver stalls, the runner loses
+          # contact with GitHub and the job dies. Put the runner's own DNS back.
+          sudo networksetup -setdnsservers Ethernet Empty
+          sudo networksetup -setsearchdomains Ethernet Empty
+          scutil --dns | grep -m3 nameserver || true
           tailscale status || true
           ifconfig | grep -A3 '^utun' | grep -E '^utun|inet 100\.' || true
           /usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate || true
@@ -120,9 +127,17 @@ jobs:
           echo " Password: your VNC_PASSWORD secret. macOS user: runner"
           echo " To finish early, create a file named STOP on the Mac desktop."
           echo "================================================================"
+          caffeinate -dimsu &
           end=$(( $(date +%s) + MINUTES * 60 ))
+          tick=0
           while [ "$(date +%s)" -lt "$end" ] && [ ! -f "$HOME/Desktop/STOP" ]; do
             sleep 30
+            tick=$((tick + 1))
+            if [ $((tick % 10)) -eq 0 ]; then
+              ts="$(tailscale status --self --peers=false 2>&1 | head -1)"
+              gh="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 https://api.github.com || true)"
+              echo "$(date -u +%H:%M) tailscale: ${ts} | github: ${gh}"
+            fi
           done
 
       - name: Explain how to enable the desktop
