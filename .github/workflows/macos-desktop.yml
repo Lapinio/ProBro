@@ -36,6 +36,7 @@ jobs:
             fi
             VNC_PASSWORD="$(openssl rand -hex 4)"
           fi
+          echo "::add-mask::$VNC_PASSWORD"
           # Same password for the macOS user "runner" (login, sudo, Keychain prompts), if the image allows it.
           sudo sysadminctl -resetPasswordFor runner -newPassword "$VNC_PASSWORD" 2>&1 \
             || echo "::warning::Could not set the runner user password; VNC still works with VNC_PASSWORD."
@@ -53,18 +54,9 @@ jobs:
           done
           nc -z 127.0.0.1 5900 || { echo "::error::VNC server is not listening on port 5900"; exit 1; }
           python3 -m venv "$RUNNER_TEMP/vnc"
-          "$RUNNER_TEMP/vnc/bin/pip" install -q vncdotool pillow
+          "$RUNNER_TEMP/vnc/bin/pip" install -q pycryptodome pillow
           mkdir -p build
-          "$RUNNER_TEMP/vnc/bin/vncdo" -s 127.0.0.1::5900 -p "$VNC_PASSWORD" --timeout 60 capture build/desktop.png
-          "$RUNNER_TEMP/vnc/bin/python" - <<'EOF'
-          from PIL import Image
-          img = Image.open("build/desktop.png").convert("L")
-          lo, hi = img.getextrema()
-          print(f"VNC frame {img.size[0]}x{img.size[1]}, brightness range {lo}..{hi}")
-          if hi - lo < 10:
-              raise SystemExit("::error::VNC frame is blank: screen recording is blocked for Screen Sharing")
-          print("VNC shows the desktop")
-          EOF
+          "$RUNNER_TEMP/vnc/bin/python" scripts/vnc_selfcheck.py 127.0.0.1 5900 "$VNC_PASSWORD" build/desktop.png
 
       - name: Upload desktop screenshot
         if: always()
