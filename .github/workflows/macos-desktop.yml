@@ -1,0 +1,92 @@
+name: macOS desktop (VNC)
+
+# Starts a macOS runner with Xcode and exposes its desktop over VNC inside your
+# private Tailscale network, so you can use it from Windows like a remote Mac.
+# Without the TAILSCALE_AUTHKEY secret it only runs a self-check and stops.
+on:
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: "How long to keep the desktop alive (max 350)"
+        default: "120"
+        required: true
+
+jobs:
+  desktop:
+    runs-on: macos-26
+    timeout-minutes: 360
+    env:
+      TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
+      VNC_PASSWORD: ${{ secrets.VNC_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Select Xcode 26
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)"
+
+      - name: Prepare project
+        run: make project
+
+      - name: Enable Screen Sharing (VNC)
+        run: |
+          if [ -z "$VNC_PASSWORD" ]; then
+            if [ -n "$TAILSCALE_AUTHKEY" ]; then
+              echo "::error::Set the VNC_PASSWORD secret (up to 8 characters) before using the desktop."
+              exit 1
+            fi
+            VNC_PASSWORD="$(openssl rand -hex 4)"
+          fi
+          # Same password for the macOS user "runner" (login, sudo, Keychain prompts).
+          sudo dscl . -passwd /Users/runner "$VNC_PASSWORD"
+          kickstart=/System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart
+          sudo "$kickstart" -configure -allowAccessFor -allUsers -privs -all
+          sudo "$kickstart" -configure -clientopts -setvnclegacy -vnclegacy yes -setvncpw -vncpw "$VNC_PASSWORD"
+          sudo "$kickstart" -activate -configure -access -on -restart -agent -console
+
+      - name: Self-check
+        run: |
+          for i in $(seq 1 30); do
+            nc -z 127.0.0.1 5900 && break
+            sleep 2
+          done
+          nc -z 127.0.0.1 5900 || { echo "::error::VNC server is not listening on port 5900"; exit 1; }
+          echo "VNC is listening on port 5900"
+          mkdir -p build
+          screencapture -x build/desktop.png && echo "Desktop session is available"
+
+      - name: Upload desktop screenshot
+        uses: actions/upload-artifact@v5
+        with:
+          name: desktop-screenshot
+          path: build/desktop.png
+          if-no-files-found: warn
+
+      - name: Connect to Tailscale
+        if: env.TAILSCALE_AUTHKEY != ''
+        uses: tailscale/github-action@v4
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+          hostname: probro-mac-${{ github.run_number }}
+
+      - name: Keep desktop alive
+        if: env.TAILSCALE_AUTHKEY != ''
+        env:
+          MINUTES: ${{ github.event.inputs.minutes }}
+        run: |
+          host="probro-mac-${{ github.run_number }}"
+          ip="$(tailscale ip -4 2>/dev/null | head -1 || true)"
+          echo "================================================================"
+          echo " Open your VNC viewer on Windows and connect to:"
+          echo "   ${ip:-$host}:5900   (or ${host}:5900)"
+          echo " Password: your VNC_PASSWORD secret. macOS user: runner"
+          echo " To finish early, create a file named STOP on the Mac desktop."
+          echo "================================================================"
+          end=$(( $(date +%s) + MINUTES * 60 ))
+          while [ "$(date +%s)" -lt "$end" ] && [ ! -f "$HOME/Desktop/STOP" ]; do
+            sleep 30
+          done
+
+      - name: Explain how to enable the desktop
+        if: env.TAILSCALE_AUTHKEY == ''
+        run: |
+          echo "::notice::Self-check passed. Add the TAILSCALE_AUTHKEY and VNC_PASSWORD secrets to use the desktop (see README)."
