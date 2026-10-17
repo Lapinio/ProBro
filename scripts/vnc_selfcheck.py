@@ -66,7 +66,7 @@ def main(host, port, password, out):
     while covered < width * height:
         msg_type = recv_exact(sock, 1)[0]
         if msg_type == 0:
-            _, rects = struct.unpack(">xH", recv_exact(sock, 3))
+            (rects,) = struct.unpack(">xH", recv_exact(sock, 3))
             for _ in range(rects):
                 x, y, w, h, enc = struct.unpack(">HHHHi", recv_exact(sock, 12))
                 if enc != 0:
